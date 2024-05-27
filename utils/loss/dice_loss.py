@@ -428,7 +428,7 @@ def onehot(outs, targ, argmax=True):
     if argmax is True:
         outs = torch.softmax(outs, dim=1)
         outs = torch.argmax(outs, dim=1)
-    class_ = torch.max(targ)
+    class_ = int(torch.max(targ))
     print(class_)
     if len(shape) == 4:
         sh = (batch, class_ + 1, shape[1], shape[2], shape[3])

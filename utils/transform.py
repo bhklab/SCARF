@@ -124,7 +124,7 @@ class sitkZoom3D(MTTransform):
             # best for masks, no gaussian smoothing required...
             resample.SetInterpolator = sitk.sitkNearestNeighbor
 
-        orig_size = np.array(image.GetSize(), dtype=np.int)
+        orig_size = np.array(image.GetSize(), dtype=int)
         orig_spacing = np.array(image.GetSpacing())
         resample.SetOutputDirection(image.GetDirection())
         resample.SetOutputOrigin(image.GetOrigin())
@@ -134,7 +134,7 @@ class sitkZoom3D(MTTransform):
         # new_spacing[:2] = orig_spacing[:2]
         # resample.SetOutputPixelType = sitk_image.GetPixelIDValue()
         new_size = orig_size * (orig_spacing / new_spacing)
-        new_size = np.ceil(new_size).astype(np.int)  #  Image dimensions are in integers
+        new_size = np.ceil(new_size).astype(int)  #  Image dimensions are in integers
         new_size = [int(s) for s in new_size]
         resample.SetSize(new_size)
 
@@ -193,7 +193,7 @@ class RandomZoom3D(MTTransform):
         y2, x2 = y1 + height, x1 + width
         bbox = np.array([y1, x1, y2, x2])
         # Map back to original image coordinates
-        bbox = (bbox / zoom_factor).astype(np.int)
+        bbox = (bbox / zoom_factor).astype(int)
         y1, x1, y2, x2 = bbox
         cropped_img = img[y1:y2, x1:x2]
 
@@ -387,15 +387,15 @@ class RandomCrop3D(MTTransform):
             shape = img.size()
 
         if self.mode != "test":
-            centerz = np.int(self.center[0]) if self.center is not None else self.z // 2
-            centerx = np.int(self.center[2]) if self.center is not None else self.x // 2
-            centery = np.int(self.center[1]) if self.center is not None else self.y // 2
+            centerz = int(self.center[0]) if self.center is not None else self.z // 2
+            centerx = int(self.center[2]) if self.center is not None else self.x // 2
+            centery = int(self.center[1]) if self.center is not None else self.y // 2
         else:
-            centerx = np.int(self.center[1]) if self.center is not None else self.x // 2
-            centery = np.int(self.center[0]) if self.center is not None else self.y // 2
+            centerx = int(self.center[1]) if self.center is not None else self.x // 2
+            centery = int(self.center[0]) if self.center is not None else self.y // 2
 
-        startx = np.int(centerx) - (self.factor // 2) - 1
-        starty = np.int(centery) - (self.factor // 2) - 1
+        startx = int(centerx) - (self.factor // 2) - 1
+        starty = int(centery) - (self.factor // 2) - 1
 
         if self.mode == "train":
             assert len(self.center) == 3
@@ -417,12 +417,12 @@ class RandomCrop3D(MTTransform):
                 assert startx < (self.x - self.factor - 1)
             except Exception:
                 warnings.warn('Startx needs to be changed for effective crop.')
-                startx = np.int(centery) - (self.factor // 2) - 1
+                startx = int(centery) - (self.factor // 2) - 1
             try:
                 assert starty < (self.y - self.factor - 1)
             except Exception:
                 warnings.warn('Starty needs to be changed for effective crop.')
-                starty = np.int(centery) - (self.factor // 2) - 1
+                starty = int(centery) - (self.factor // 2) - 1
  
         else:
             try:
@@ -440,13 +440,13 @@ class RandomCrop3D(MTTransform):
             except Exception:
                 warnings.warn('Startx needs to be changed for effective crop.')
                 # set to center if cropped too far outside of window params...
-                startx = np.int(centerx) - (self.factor // 2) - 1
+                startx = int(centerx) - (self.factor // 2) - 1
             try:
                 assert starty < (self.y - self.factor - 1)
             except Exception:
                 # set to center if cropped too far outside of window params...
                 warnings.warn('Starty needs to be changed for effective crop.')
-                starty = np.int(centery) - (self.factor // 2) - 1
+                starty = int(centery) - (self.factor // 2) - 1
 
         # Use during training.
         # for vlidation stay cropped around GTV...
@@ -836,8 +836,8 @@ class NormBabe(MTTransform):
 
     def __init__(self, mean=False, std=False, min=-196.0, max=296.0, type="standard"):
 
-        self.mean = np.float(mean)
-        self.std = np.float(std)
+        self.mean = float(mean)
+        self.std = float(std)
         self.min = min
         self.max = max
         self.type = type

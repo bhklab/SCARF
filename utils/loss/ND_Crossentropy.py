@@ -61,6 +61,8 @@ class WeightedCrossEntropyLoss(torch.nn.CrossEntropyLoss):
 class TopKLoss(CrossentropyND):
     """
     Network has to have NO LINEARITY!
+
+    https://github.com/JunMa11/SegLossOdyssey/blob/master/losses_pytorch/ND_Crossentropy.py
     """
     def __init__(self, weight=None, ignore_index=-100, k=10):
         super(TopKLoss, self).__init__(weight, False, ignore_index, reduce=False)
@@ -86,7 +88,11 @@ class TopKLoss(CrossentropyND):
         num_voxels = np.prod(res.shape)
         res, _ = torch.topk(res.view((-1, )), int(num_voxels * self.k / 100), sorted=False)
         # we can run an oblation test determining best position to correct for label variability?
-        return res.mean()*(torch.sum(torch.ones_like(mask))/torch.sum(mask))
+        
+        if mask is None:
+            return res.mean()
+        else:
+            return res.mean()*(torch.sum(torch.ones_like(mask))/torch.sum(mask))
 
 
 class WeightedCrossEntropyLossV2(torch.nn.Module):
