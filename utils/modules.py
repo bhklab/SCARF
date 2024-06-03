@@ -30,7 +30,7 @@ def read_image(path):
     return img
 
 class Dataset(Dataset):
-    def __init__(self, paths, transform, data_path):
+    def __init__(self, paths, data_path, transform=None):
         super().__init__()
         self.paths = paths
         self.transform = transform
@@ -44,7 +44,8 @@ class Dataset(Dataset):
         image = read_image(os.path.join(self.data_path, image_path['image']))
         label = read_image(os.path.join(self.data_path, image_path['label']))    
 
-        image, label = self.transform(image, label)
+        if self.transform is not None:
+            image, label = self.transform(image, label)
 
         return image, label 
 
@@ -58,8 +59,6 @@ class SegmentationModule(pl.LightningModule):
         if update_lr is not None:
             self.hparams.lr = update_lr
 
-
-    
     def setup(self, stage=None):
         train_data = self.config["train"]
         self.train_data = []
@@ -67,11 +66,10 @@ class SegmentationModule(pl.LightningModule):
             self.train_data += train_data
         self.valid_data = self.config['val']
 
-        self.mean = self.config['mean']
-        self.std = self.config['std']
-
         self.get_model()
+        self.get_data_info()
         self.get_loss()
+
 
     def forward(self, x):
         x = x.unsqueeze(1)
@@ -164,26 +162,20 @@ class SegmentationModule(pl.LightningModule):
             
     def get_weights(self):
 
-        try:
-            voxel_info = self.config["VOXINFO"]
-            rois = list(voxel_info.keys())
-            self.config["ROIS"] = rois
-            base = np.array([1e-40])
-            values = list(voxel_info.values())
-            values = [int(v) for v in values]
-            weights = np.array(values)/(np.sum(values)+1e-4)
-            weights = np.append(base, weights)
-            weights = np.abs(np.log(weights))
-            weights[0] = 0.1
-            weights = (weights-np.min(weights))/(np.max(weights)-np.min(weights))
-            weights[0] = 0.0001
-            weights[np.argmax(weights)] = 0.9999
-            self.config["weights"] = weights
-            print(weights, "\n(Weights used to mitigate class imbalance...)\n") 
-        except Exception as e:
-            weights = None
+        base = np.array([1e-40])
+        values = [int(v) for v in self.counts]
+        weights = np.array(values)/(np.sum(values)+1e-4)
+        weights = np.append(base, weights)
+        weights = np.abs(np.log(weights))
+        weights[0] = 0.1
+        weights = (weights-np.min(weights))/(np.max(weights)-np.min(weights))
+        weights[0] = 0.0001
+        weights[np.argmax(weights)] = 0.9999
+        self.config["weights"] = weights
+        
+        print(weights, "\n(Weights used to mitigate class imbalance...)\n") 
 
-        return weights
+        return torch.from_numpy(weights.astype(np.float32))
 
     def get_loss(self):
         self.class_weights = self.get_weights()
@@ -222,8 +214,6 @@ class SegmentationModule(pl.LightningModule):
 
         """
         Layout model
-        :return:
-        n_classes + 1 (because we need to include background)
         """
 
         if self.hparams.model == "VNET":
@@ -269,6 +259,31 @@ class SegmentationModule(pl.LightningModule):
         elif self.hparams.model == "DENSEVOX":
             self.model = DenseVoxelNet(in_channels=1, num_classes=self.hparams.n_classes)
 
+    def get_data_info(self):
+
+        dataset = Dataset(self.train_data, self.hparams.data_path, None)
+
+        self.mean = 0.
+        self.std = 0.
+
+        self.counts = [0.] * (self.hparams.n_classes-1)
+
+        for i in range(len(dataset)):
+            image, label = dataset[i]
+
+            self.mean += np.mean(image)
+            self.std += np.std(image)
+
+            for label_idx in range(1, self.hparams.n_classes):
+                self.counts[label_idx-1] += np.sum(label == label_idx)
+
+        self.mean /= len(dataset)
+        self.std = len(dataset)
+
+        print(f'Dataset has mean {self.mean} and std {self.std}')
+
+        self.counts = [c/len(dataset) for c in self.counts]
+
     # -------------------
     #  DATA LOADERS
     # -------------------
@@ -276,7 +291,7 @@ class SegmentationModule(pl.LightningModule):
     def get_dataloader( self, df, mode="valid", transform=None, resample=None,
                         shuffle=False, transform2=None, batch_size=None):
 
-        dataset = Dataset(df, transform, self.hparams.data_path)
+        dataset = Dataset(df, self.hparams.data_path, transform)
 
         batch_size = self.hparams.batch_size if batch_size is None else batch_size
         # best practices to turn shuffling off during validation...

@@ -62,7 +62,5 @@
             "image": "/nnUNet_raw/Dataset003_RADCURE/imagesTr/rad_015_0000.nii.gz",
             "label": "/nnUNet_raw/Dataset003_RADCURE/labelsTr/rad_015.nii.gz"
         }
-    ],
-    "std": 226.03663728492648,
-    "mean": -407.4462155135238
+    ]
 }
