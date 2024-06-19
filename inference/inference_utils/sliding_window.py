@@ -1,7 +1,7 @@
 import torch, warnings, os
 import numpy as np
 
-def gpu_swi(image, model, n_classes, window_size=(1, 112, 176, 176), batch=False):
+def gpu_swi(image, model, n_classes, window_size=(1, 112, 176, 176), batch=False, aggressive=False):
     """
     Sliding Window
     Args:
@@ -11,13 +11,9 @@ def gpu_swi(image, model, n_classes, window_size=(1, 112, 176, 176), batch=False
         window_size (tuple): shape of window size
         mira_flag (bool): controls how many windows to use
         batch (bool): some models don't take batch dimension
+        aggressive (bool): if True uses aggressive windowing
     Returns:
         tensor: The segmented output
-    Example:
-    >>> PATH = '/content/drive/MyDrive/BHKLAB/Mira_Inference'
-    >>> model = WolnyUNet3D(num_classes=20, f_maps=48)
-    >>> test = torch.zeros(1, 128, 224, 224)
-    >>> res = optimized_swi(test, model, 20, PATH, mira_flag=True)
     """
     if len(image.shape) < 5:
         image = image.unsqueeze(0)
@@ -25,9 +21,36 @@ def gpu_swi(image, model, n_classes, window_size=(1, 112, 176, 176), batch=False
     br, zr, yr, xr = window_size
     _, _, z, y, x = image.shape
 
-    window_z_coords = [(0, zr), (z//2-zr//2, z//2+zr//2), (z-zr, z)]
-    window_y_coords = [(0, yr), (y-yr, y)]
-    window_x_coords = [(0, xr), (x-xr, x)]
+
+    if aggressive:
+        # Z coordinates
+        window_z_coords = [(0, zr), (z // 4, z // 4 + zr), (z - z // 4 - zr, z - z // 4), (z - zr, z)]
+
+        # Y coordinates
+        window_y_coords = [
+            (0, yr),
+            (y - yr, y),
+            (y // 12, y // 12 + yr),
+            (y // 6, y // 6 + yr),
+            (y - y // 4 - yr, y - y // 4),
+            (y - y // 6 - yr, y - y // 6)
+        ]
+
+        # X coordinates
+        window_x_coords = [
+            (0, xr),
+            (x - xr, x),
+            (x // 12, x // 12 + xr),
+            (x // 4, x // 4 + xr),
+            (x // 6, x // 6 + xr),
+            (x - x // 4 - xr, x - x // 4),
+            (x - x // 6 - xr, x - x // 6),
+            (x - x // 12 - xr, x - x // 12)
+        ]
+    else:
+        window_z_coords = [(0, zr), (z//2-zr//2, z//2+zr//2), (z-zr, z)]
+        window_y_coords = [(0, yr), (y-yr, y)]
+        window_x_coords = [(0, xr), (x-xr, x)]
 
 
     output_shape = (br, n_classes, z, y, x)

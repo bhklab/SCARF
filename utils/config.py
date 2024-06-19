@@ -47,7 +47,7 @@ def add_args(return_="parser"):
     arg("--filter", type=bool, default=False, help="Used to process new RESAMPLED RADCURE with masks located in /cluster/projects/radiomics/Temp/RESAMPLED")
     arg("--testing", type=bool, default=False)
     arg("--metrics-name", type=str, default="METRICSGNECK_2020_02_18_100330")
-    arg("--spacing", type=str, default="1mm")
+    arg("--spacing", type=int, default=0, help="Determines if to use standardized spacing of (x: 1, y: 1, z: 3)")
     arg("--volume-type", type=str, default="targets")
     arg("--oar-version", type=str, default="single")
     arg("--dce-version", type=int, default=1)

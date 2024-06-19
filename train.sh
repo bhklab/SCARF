@@ -27,15 +27,16 @@ window=56 # default is 5
 crop_factor=176 # 192 # 448 # 384 # default is 512
 crop_as='3D'
 fmaps=48
-spacing='3mm' # spacing between slices...
+spacing=0 
 filter=True
 path="./train.py" 
 config_path='configs/example_config.json'
 print_outputs_to=$model'_'$tag'_'$(date "+%b_%d_%Y_%T").txt
+data_path="/cluster/projects/radiomics/Temp/josh"
 
 echo 'Started python script.'
 
-python3 $path --model $model --config-path $config_path \
+python3 $path --model $model --config-path $config_path --data-path $data_path \
         --scheduler-type $scheduler_type --aug-prob $aug_p \
         --spacing $spacing --f-maps $fmaps \
         --n-classes $classes --shuffle-data $shuffle \

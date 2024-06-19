@@ -17,9 +17,20 @@ def getJson(path):
     obj = json.loads(data)
     return obj
 
-def read_image(path):
-    img = sitk.ReadImage(path)
-    img = sitk.GetArrayFromImage(img)
+def read_image(path, new_spacing=None):
+    ref = sitk.ReadImage(path)
+
+    if new_spacing is not None:
+        spacing = img.GetSpacing()
+        size = img.GetSize()
+        new_size = (np.round(size*(spacing/np.array(new_spacing)))).astype(int).tolist()
+
+        ref = sitk.Resample(img, new_size, sitk.Transform(),
+            sitk.sitkNearestNeighbor, img.GetOrigin(), new_spacing,
+            img.GetDirection(), 0.0, img.GetPixelID())
+    
+    img = sitk.GetArrayFromImage(ref)
+
 
     if img.shape[0] == img.shape[1]:
         img = E.rearrange(img, 'H W D -> D H W')
@@ -30,19 +41,20 @@ def read_image(path):
     return img
 
 class Dataset(Dataset):
-    def __init__(self, paths, data_path, transform=None):
+    def __init__(self, paths, data_path, transform=None, spacing=None):
         super().__init__()
         self.paths = paths
         self.transform = transform
         self.data_path = data_path
+        self.spacing = spacing
 
     def __len__(self):
         return len(self.paths)
 
     def __getitem__(self, index):
         image_path = self.paths[index]
-        image = read_image(os.path.join(self.data_path, image_path['image']))
-        label = read_image(os.path.join(self.data_path, image_path['label']))    
+        image = read_image(os.path.join(self.data_path, image_path['image']), self.spacing)
+        label = read_image(os.path.join(self.data_path, image_path['label']), self.spacing)    
 
         if self.transform is not None:
             image, label = self.transform(image, label)
@@ -60,16 +72,19 @@ class SegmentationModule(pl.LightningModule):
             self.hparams.lr = update_lr
 
     def setup(self, stage=None):
-        train_data = self.config["train"]
-        self.train_data = []
-        for _ in range(5): # 10x elements in training fold
-            self.train_data += train_data
+
+        self.train_data = self.config["train"]
         self.valid_data = self.config['val']
 
         self.get_model()
         self.get_data_info()
         self.get_loss()
 
+        if self.hparams.spacing:
+            self.spacing = [1, 1, 3]
+        else:
+            self.spacing = None
+        print(self.spacing)
 
     def forward(self, x):
         x = x.unsqueeze(1)
