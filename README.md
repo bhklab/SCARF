@@ -6,7 +6,7 @@
 
 Official Github page for ["auto-Segmentation Clinical Acceptability & Reproducibility Framework"](https://www.medrxiv.org/content/10.1101/2022.01.15.22269276v2) currently on archive.
 
-<img src="paper/Figures/overview.jpg" alt="Overview" width="600" height="475">
+<img src="paper/Figures/overview_scarf.jpg" alt="Overview" width="600" height="475">
 
 ### Highlights:
 - Our study highlights the significance of both quantitative and qualitative controls for benchmarking new auto-segmentation systems effectively, promoting a more robust evaluation process of AI tools.
