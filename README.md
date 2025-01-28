@@ -6,14 +6,17 @@
 
 Official Github page for ["auto-Segmentation Clinical Acceptability & Reproducibility Framework"](https://www.medrxiv.org/content/10.1101/2022.01.15.22269276v2) currently on archive.
 
-<img src="paper/Figures/overview_scarf.jpg" alt="Overview" width="600" height="475">
+<img src="paper/Figures/overview_scarf.png" alt="Overview">
 
 ### Highlights:
-- Our study highlights the significance of both quantitative and qualitative controls for benchmarking new auto-segmentation systems effectively, promoting a more robust evaluation process of AI tools.
-- We address the lack of baseline models for medical image segmentation benchmarking by presenting SCARF, a comprehensive and reproducible six-stage framework, which serves as a valuable resource for advancing auto-segmentation research and contributing to the foundation of AI tools in radiation therapy planning.
-- SCARF enables benchmarking of 11 open-source convolutional neural networks (CNN) against 19 essential organs-at-risk (OARs) for radiation therapy in head and neck cancer, fostering transparency and facilitating external validation.
-- To accurately assess the performance of auto-segmentation models, we introduce a clinical assessment toolkit based on the open-source QUANNOTATE platform, further promoting the use of external validation tools and expert assessment.
-- Our study emphasises the importance of clinical acceptability testing and advocates its integration into developing validated AI tools for radiation therapy planning and beyond, bridging the gap between AI research and clinical practice.
+
+- SCARF is a research, development and clinical assessment framework for auto-segmentation of organs-at-risk in head and neck cancer.
+
+- SCARF facilitates benchmarking and expert assessment of AI-driven auto-segmentation tools, addressing the need for transparency and reproducibility in this domain.
+
+- New models can be benchmarked against 11 pre-trained open-source deep learning models, while estimating clinical acceptability using a regularized logistic regression model.
+
+- The SCARF framework code base is openly-available for OAR auto-segmentation benchmarking.
 
 ## Getting Started
 
@@ -21,22 +24,70 @@ To run inference using the trained models follow the instruction found here:<br>
 
 [![Model Inference in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1YjbnqRCKdaTnEg3xdKyo2bzSRpMNoQ8I?usp=sharing)
 
-To train the models:
+---
 
-- Clone repo and initialize Conda environment
+#### 1. Clone the Repository and Set Up the Environment
 
-```shell
+```bash
 git clone https://github.com/bhklab/SCARF.git
-conda env create -f environment.yml
+cd SCARF
+!pip install -r inference/requirements.txt
 ```
 
-- Put your nifti/nrrd images in the format described in "configs/example_config.json"
-- Run train.sh script
+#### 2. Prepare Your Data
 
-```shell
+If needed use [med-imagetools](https://github.com/bhklab/med-imagetools) to process your raw dicom images. 
+Preferably use the nnUNet flag to combine ROIs(Region of Interests) into one label image, instructions found [here](https://bhklab.github.io/med-imagetools/devel/cli/nnUNet/).
+
+Organize your dataset according to the structure described in configs/example_config.json. Each entry in the configuration file should include paths to:
+
+    Nifti (.nii.gz) or NRRD (.nrrd) images for inputs.
+    Corresponding segmentation masks for training.
+
+Required format for data config(also found in configs/example_config.json):
+
+```json
+{
+  "train": [
+    {
+      "image": "data/train/image_001.nii.gz",
+      "label": "data/train/label_001.nii.gz"
+    },
+    ...
+  ],
+  "val": [
+    {
+      "image": "data/val/image_001.nii.gz",
+      "label": "data/val/label_001.nii.gz"
+    },
+    ...
+  ]
+}
+```
+
+#### 3. Start Training
+
+**EDIT** the `train.sh` file to your `config_path` and `data_path`.
+
+Make the training script executable and run it:
+
+```bash
 chmod +x train.sh
 ./train.sh
 ```
+
+The script will:
+
+    Load training and validation data as specified in the configuration file.
+    Initialize the chosen model architecture, loss function, and optimizer.
+    Start the training loop using PyTorch Lightning.
+
+#### 4. Run Inference and Evaluate
+
+Follow the instructions found here [![here](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1YjbnqRCKdaTnEg3xdKyo2bzSRpMNoQ8I?usp=sharing), to run inference. Load in your saved weights and pass in argument `CUSTOM` for model in `run_inference` function.
+
+You can also evaluate the model using our selected metrics using the function `calc_metric`, as detailed on the notebook.
+
 
 ## Citation
 
