@@ -78,9 +78,9 @@ chmod +x train.sh
 
 The script will:
 
-    Load training and validation data as specified in the configuration file.
-    Initialize the chosen model architecture, loss function, and optimizer.
-    Start the training loop using PyTorch Lightning.
+- Load training and validation data as specified in the configuration file.
+- Initialize the chosen model architecture, loss function, and optimizer.
+- Start the training loop using PyTorch Lightning.
 
 #### 4. Run Inference and Evaluate
 
