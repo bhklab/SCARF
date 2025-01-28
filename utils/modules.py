@@ -1,23 +1,46 @@
 import os, torch, warnings, json
+from typing import List, Callable, Optional, Tuple
+
 from torch.nn import CrossEntropyLoss
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
+from torch.utils.data import Dataset as TorchDataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
+
 import lightning as pl
 import numpy as np
 import einops as E
+
 from .metrics import SoftDiceLoss
 from .loss import *
 from .optimizers import *
 from .models import *
 from .transform import *
 
-def getJson(path):
+##############################
+#           UTILS            #
+##############################
+
+def getJson(path: str) -> dict:
+    """Read Json file at path"""
     with open(path, 'r') as myfile:
         data=myfile.read()
     obj = json.loads(data)
     return obj
 
-def read_image(path, new_spacing=None):
+def read_image(path: str, new_spacing: list[float] = None) -> np.ndarray:
+    """
+    Reads a medical image from the given path, optionally resampling it 
+    to a new voxel spacing, and returns the image as a NumPy array.
+
+    Args:
+        path (str): Path to the medical image file.
+        new_spacing (list[float], optional): Desired voxel spacing for resampling 
+            the image. If None, no resampling is performed. Defaults to None.
+
+    Returns:
+        np.ndarray: The medical image as a 3D NumPy array in the shape (D, H, W),
+                    where D is the depth, H is the height, and W is the width.
+    """
     ref = sitk.ReadImage(path)
 
     if new_spacing is not None:
@@ -31,48 +54,99 @@ def read_image(path, new_spacing=None):
     
     img = sitk.GetArrayFromImage(ref)
 
-
     if img.shape[0] == img.shape[1]:
         img = E.rearrange(img, 'H W D -> D H W')
 
     img = img.astype(np.float32)
-    # img = torch.from_numpy(img)
 
     return img
 
-class Dataset(Dataset):
-    def __init__(self, paths, data_path, transform=None, spacing=None):
+class Dataset(TorchDataset):
+    """
+    A PyTorch Dataset class for loading medical images and their corresponding labels.
+
+    Attributes:
+        paths (List[dict]): Stores the paths to the images and labels.
+        data_path (str): Root directory for the dataset.
+        transform (Callable, optional): Transformation function for image-label pairs.
+        spacing (Optional[List[float]]): Desired spacing for resampling.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: A tuple containing the image and label as 
+                                       NumPy arrays.
+    """
+    def __init__(
+        self, 
+        paths: List[dict], 
+        data_path: str, 
+        transform: Optional[Callable] = None, 
+        spacing: Optional[List[float]] = None
+    ):
         super().__init__()
         self.paths = paths
-        self.transform = transform
         self.data_path = data_path
+        self.transform = transform
         self.spacing = spacing
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.paths)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> Tuple[np.ndarray, np.ndarray]:
         image_path = self.paths[index]
-        image = read_image(os.path.join(self.data_path, image_path['image']), self.spacing)
-        label = read_image(os.path.join(self.data_path, image_path['label']), self.spacing)    
+
+        image = read_image(
+            os.path.join(self.data_path, image_path['image']), 
+            self.spacing
+        )
+        label = read_image(
+            os.path.join(self.data_path, image_path['label']), 
+            self.spacing
+        )
 
         if self.transform is not None:
             image, label = self.transform(image, label)
 
-        return image, label 
+        return image, label
+    
+#################################
+#           TRAINING            #
+#################################
 
 class SegmentationModule(pl.LightningModule):
+    """
+    A PyTorch Lightning Module for medical image segmentation, providing 
+    training, validation, and data preprocessing routines.
+
+    Args:
+        hparams (Namespace): A namespace containing hyperparameters and configurations.
+        update_lr (Optional[float]): Optional learning rate override. Defaults to None.
+
+    Attributes:
+        hparams (Namespace): Hyperparameters and configurations passed to the module.
+        config (dict): Configuration loaded from JSON specified in `hparams.config_path`.
+        model (nn.Module): Neural network model for segmentation tasks.
+        criterion (Callable): Loss function for training the model.
+        class_weights (torch.Tensor): Class weights for handling class imbalance.
+        mean (float): Dataset mean for normalization.
+        std (float): Dataset standard deviation for normalization.
+        counts (List[float]): Frequency of each class in the dataset.
+        spacing (Optional[List[float]]): Voxel spacing for image resampling.
+    """
     def __init__(self, hparams, update_lr=None):
         super().__init__()
         self.save_hyperparameters(hparams)
-        # reload pre-trained model...
         self.config = getJson(self.hparams.config_path)
 
         if update_lr is not None:
             self.hparams.lr = update_lr
 
-    def setup(self, stage=None):
+    def setup(self, stage: Optional[str] = None) -> None:
+        """
+        Setup datasets, model, loss function, and other configuration.
 
+        Args:
+            stage (Optional[str]): Stage of the setup ('fit', 'validate', etc.). Defaults to None.
+        """
         self.train_data = self.config["train"]
         self.valid_data = self.config['val']
 
@@ -106,7 +180,6 @@ class SegmentationModule(pl.LightningModule):
         test = torch.argmax(test , dim=1) 
         print(test.min(), test.max(), test.size())
 
-        # targets = targets.unsqueeze(1)
         loss = self.criterion(outputs, targets)
 
         nan_val = 10
@@ -175,8 +248,13 @@ class SegmentationModule(pl.LightningModule):
     #  GET STUFF
     # -------------------
             
-    def get_weights(self):
+    def get_weights(self) -> torch.Tensor:
+        """
+        Compute class weights to address class imbalance in the dataset.
 
+        Returns:
+           torch.Tensor: Tensor of class weights normalized to [0, 1].
+        """
         base = np.array([1e-40])
         values = [int(v) for v in self.counts]
         weights = np.array(values)/(np.sum(values)+1e-4)
@@ -192,7 +270,17 @@ class SegmentationModule(pl.LightningModule):
 
         return torch.from_numpy(weights.astype(np.float32))
 
-    def get_loss(self):
+    def get_loss(self) -> None:
+        """
+        Initialize the loss function based on the specified loss type in `hparams`.
+
+        Supports:
+            - Focal Loss
+            - Weighted Categorical Cross-Entropy
+            - Weighted Dice + Top-k
+            - Focal Tversky + Top-k
+            - Soft Dice Loss
+        """
         self.class_weights = self.get_weights()
 
         self.criterion = None
@@ -225,12 +313,23 @@ class SegmentationModule(pl.LightningModule):
             self.criterion = loss
 
 
-    def get_model(self):
-
+    def get_model(self) -> None:
         """
-        Layout model
-        """
+        Initialize the segmentation model based on the specified architecture in `hparams`.
 
+        Supported Models:
+            - VNet
+            - WolnyUNet
+            - ResUNet
+            - DenseVoxelNet
+            - AnatomyNet
+            - FCDenseNet (Tiramisu)
+            - UNet++
+            - UNet3+
+            - RSANet
+            - PIPOFAN
+            - HighResNet
+        """
         if self.hparams.model == "VNET":
             self.model = VNet3D(num_classes=self.hparams.n_classes)
 
@@ -274,8 +373,14 @@ class SegmentationModule(pl.LightningModule):
         elif self.hparams.model == "DENSEVOX":
             self.model = DenseVoxelNet(in_channels=1, num_classes=self.hparams.n_classes)
 
-    def get_data_info(self):
+    def get_data_info(self) -> None:
+        """
+        Calculate dataset statistics (mean, std) and class frequencies.
 
+        Stores:
+            - `mean` and `std`: Used for data normalization.
+            - `counts`: Class frequencies for computing class weights.
+        """
         dataset = Dataset(self.train_data, self.hparams.data_path, None)
 
         self.mean = 0.
@@ -302,20 +407,39 @@ class SegmentationModule(pl.LightningModule):
     # -------------------
     #  DATA LOADERS
     # -------------------
+    def get_dataloader(
+        self, 
+        df: dict, 
+        mode: str = "valid", 
+        transform: Optional[Callable] = None, 
+        batch_size: Optional[int] = None
+    ) -> DataLoader:
+        """
+        Create a DataLoader for training or validation.
 
-    def get_dataloader( self, df, mode="valid", transform=None, resample=None,
-                        shuffle=False, transform2=None, batch_size=None):
+        Args:
+            df (Any): Dataset file paths.
+            mode (str): Mode of operation ('train', 'valid', 'test'). Defaults to "valid".
+            transform (Optional[Any]): Transformations applied to the data. Defaults to None.
+            batch_size (Optional[int]): Batch size. Defaults to None.
+
+        Returns:
+            DataLoader: PyTorch DataLoader for the dataset.
+        """
 
         dataset = Dataset(df, self.hparams.data_path, transform)
 
         batch_size = self.hparams.batch_size if batch_size is None else batch_size
-        # best practices to turn shuffling off during validation...
-        validate = ['test']
-        shuffle = False if mode=='valid' else True
+        shuffle = False if mode == 'valid' else True
 
-        return DataLoader( dataset=dataset, num_workers=self.hparams.workers,
-                           batch_size=batch_size, pin_memory=True, shuffle=shuffle,
-                           drop_last=True,)
+        return DataLoader(
+            dataset=dataset, 
+            num_workers=self.hparams.workers,
+            batch_size=batch_size, 
+            pin_memory=True, 
+            shuffle=shuffle,
+            drop_last=True
+        )
 
     def train_dataloader(self):
 
@@ -338,11 +462,15 @@ class SegmentationModule(pl.LightningModule):
         )
 
         # add transform to dataloader
-        return self.get_dataloader(df=self.train_data, mode="train", transform=transform,
-                                   resample=False, batch_size=self.hparams.batch_size,)
+        return self.get_dataloader(
+            df=self.train_data, 
+            mode="train", 
+            transform=transform, 
+            batch_size=self.hparams.batch_size
+        )
 
     def val_dataloader(self):
-        # imported from transform.py
+
         transform = Compose(
             [
                 HistogramClipping(
@@ -358,9 +486,12 @@ class SegmentationModule(pl.LightningModule):
             ]
         )
 
-        return self.get_dataloader( df=self.valid_data, mode="valid",
-                                    transform=transform,  # should be default
-                                    resample=False, batch_size=self.hparams.batch_size,)
+        return self.get_dataloader(
+            df=self.valid_data, 
+            mode="valid",
+            transform=transform, 
+            batch_size=self.hparams.batch_size
+        )
     
 
 
