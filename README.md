@@ -39,6 +39,8 @@ cd SCARF
 If needed use [med-imagetools](https://github.com/bhklab/med-imagetools) to process your raw dicom images. 
 Preferably use the nnUNet flag to combine ROIs(Region of Interests) into one label image, instructions found [here](https://bhklab.github.io/med-imagetools/devel/cli/nnUNet/).
 
+*The ROI mapping used for RADCURE can be found at confis/radcure_oar_mapping.yaml*
+
 Organize your dataset according to the structure described in configs/example_config.yaml. Each entry in the configuration file should include paths to:
 
     Nifti (.nii.gz) or NRRD (.nrrd) images for inputs.
